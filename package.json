@@ -1,0 +1,40 @@
+{
+  "name": "soopi-ecommerce",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server/dev.js",
+    "dev:client": "vite",
+    "dev:server": "node --watch server/index.js",
+    "build": "vite build",
+    "build:frontend": "vite build",
+    "preview": "vite preview",
+    "deploy": "wrangler pages deploy dist --project-name=soopi",
+    "seed": "node server/seed.js",
+    "cf:login": "wrangler login",
+    "cf:d1-create": "wrangler d1 create soopi-db",
+    "cf:d1-init": "wrangler d1 execute soopi-db --file=./server/schema.sql --remote",
+    "cf:d1-seed": "wrangler d1 execute soopi-db --file=./server/seed.sql --remote",
+    "cf:deploy": "wrangler pages deploy dist --project-name=soopi"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.7",
+    "bcryptjs": "^2.4.3",
+    "canvas-confetti": "^1.9.3",
+    "hono": "^4.6.14",
+    "jose": "^5.9.6",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "concurrently": "^9.1.0",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.16",
+    "vite": "^6.0.3",
+    "wrangler": "^4.157.0"
+  }
+}

@@ -1,0 +1,22 @@
+name = "soopi"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "dist"
+
+# Cloudflare D1 Database Binding for Production
+[[d1_databases]]
+binding = "DB"
+database_name = "soopi-db"
+database_id = "9c6141d3-1887-4b05-9b49-26e172769c54"
+
+# Cloudflare Vectorize (AI Semantic Search)
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "cloudflare-shop-index"
+
+# Cloudflare Workers AI
+[ai]
+binding = "AI"
+
+[vars]
+JWT_SECRET = "soopi-super-secret-key-2026-secure-edge-cloudflare"
