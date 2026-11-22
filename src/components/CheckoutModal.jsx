@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { api } from '../api/client';
 import { formatVND } from '../utils/format';
 import confetti from 'canvas-confetti';
+import BankTransferQR from './BankTransferQR';
 
 export default function CheckoutModal({ onClose, onOrderPlaced }) {
   const { items, totalPrice, clearCart } = useCart();
@@ -248,6 +249,13 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
                 </div>
               </label>
             </div>
+
+            {/* QR Payment Preview when Bank Transfer selected */}
+            {formData.payment_method === 'BANK_TRANSFER' && (
+              <div className="mt-3 animate-in fade-in duration-200">
+                <BankTransferQR amount={finalTotal} compact={true} />
+              </div>
+            )}
           </div>
 
           {/* Section 3: Order Items Summary */}

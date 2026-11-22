@@ -11,7 +11,8 @@ import {
   HelpCircle,
   Truck,
   Sparkles,
-  PhoneCall
+  PhoneCall,
+  Plus
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
@@ -48,7 +49,7 @@ export default function Navbar({
             </span>
             <span className="hidden md:inline-block text-orange-200">|</span>
             <span className="hidden md:flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5 text-yellow-300" /> Cam kết 100% hàng chính hãng
+              <Sparkles className="w-3.5 h-3.5 text-yellow-300" /> Cam kết 100% thủ công tinh xảo
             </span>
           </div>
           <div className="flex items-center space-x-4">
@@ -59,9 +60,9 @@ export default function Navbar({
               <Package className="w-3.5 h-3.5" /> Tra cứu đơn hàng
             </button>
             <span className="text-orange-200">|</span>
-            <span className="flex items-center gap-1">
-              <PhoneCall className="w-3.5 h-3.5" /> Hotline: 1900 6868
-            </span>
+            <a href="tel:0782251157" className="flex items-center gap-1 hover:text-orange-100 transition-colors">
+              <PhoneCall className="w-3.5 h-3.5" /> Hotline: 0782251157
+            </a>
           </div>
         </div>
       </div>
@@ -80,9 +81,8 @@ export default function Navbar({
             <div>
               <span className="text-2xl font-black tracking-tight text-gray-900 flex items-center">
                 Soo<span className="text-soopi-500">pi</span>
-                <span className="ml-1 text-[10px] font-bold uppercase bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded tracking-wider">VN</span>
               </span>
-              <p className="text-[10px] text-gray-500 font-medium -mt-1 hidden sm:block">Sàn thương mại điện tử</p>
+              <p className="text-[10px] text-gray-500 font-medium -mt-1 hidden sm:block">Thủ công mỹ nghệ Việt Nam</p>
             </div>
           </div>
 
@@ -96,7 +96,7 @@ export default function Navbar({
                 type="text"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="Tìm kiếm sản phẩm, thương hiệu, danh mục..."
+                placeholder="Tìm kiếm gốm sứ, mây tre đan, tranh thêu, nến thơm..."
                 className="w-full bg-gray-100 focus:bg-white text-gray-900 pl-4 pr-24 py-2.5 rounded-full border border-gray-200 focus:border-soopi-500 focus:ring-2 focus:ring-soopi-500/20 text-sm outline-none transition-all placeholder:text-gray-400"
               />
               <button
@@ -134,6 +134,18 @@ export default function Navbar({
                 </span>
               )}
             </button>
+
+            {/* Admin Quick Add to Shelf Button */}
+            {isAdmin && (
+              <button
+                onClick={onOpenAdmin}
+                className="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-soopi-700 border border-orange-200 rounded-full font-bold text-xs transition-all cursor-pointer shadow-2xs"
+                title="Mở quản trị kệ hàng"
+              >
+                <Plus className="w-3.5 h-3.5 text-soopi-600" />
+                <span>+ Thêm Vào Kệ Hàng</span>
+              </button>
+            )}
 
             {/* User Account Menu */}
             <div className="relative">

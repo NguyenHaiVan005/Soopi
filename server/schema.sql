@@ -62,6 +62,8 @@ CREATE TABLE IF NOT EXISTS orders (
   subtotal REAL NOT NULL,
   shipping_fee REAL DEFAULT 0,
   total_amount REAL NOT NULL,
+  cancel_reason TEXT,
+  cancelled_by TEXT, -- 'admin' | 'customer'
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL

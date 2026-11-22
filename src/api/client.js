@@ -53,6 +53,8 @@ export const api = {
   getMyOrders: () => request('/orders/my-orders'),
   getOrderById: (id) => request(`/orders/${id}`),
   trackOrder: (code) => request(`/orders/track/${encodeURIComponent(code)}`),
+  cancelMyOrder: (id, reason) => request(`/orders/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  cancelTrackedOrder: (code, reason) => request(`/orders/track/${encodeURIComponent(code)}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }),
 
   // Admin APIs
   admin: {

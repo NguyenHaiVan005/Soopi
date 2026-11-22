@@ -68,7 +68,7 @@ export default function Footer({ onOpenAdmin }) {
               </p>
               <p className="flex items-center gap-2">
                 <Phone className="w-4 h-4 text-orange-500 shrink-0" />
-                <span>1900 6868 (8:00 - 21:00)</span>
+                <a href="tel:0782251157" className="hover:text-soopi-600 transition-colors">0782251157 (8:00 - 21:00)</a>
               </p>
               <p className="flex items-center gap-2">
                 <Mail className="w-4 h-4 text-orange-500 shrink-0" />

@@ -5,15 +5,15 @@ import { formatVND } from '../utils/format';
 const WELCOME_MSG = {
   id: 0,
   role: 'assistant',
-  text: 'Xin chào! 👋 Mình là trợ lý mua sắm AI của Soopi.\n\nMình có thể giúp bạn tìm sản phẩm, so sánh giá, hoặc tư vấn mua hàng. Bạn cần tìm gì hôm nay?',
+  text: 'Xin chào! 👋 Mình là trợ lý mua sắm AI của Soopi.\n\nMình có thể giúp bạn tìm các sản phẩm thủ công tinh xảo, gốm sứ Bát Tràng, mây tre đan, tranh thêu tay hoặc quà tặng ý nghĩa. Bạn cần tìm gì hôm nay?',
   products: [],
 };
 
 const QUICK_QUESTIONS = [
-  'Tai nghe chống ồn tốt nhất?',
-  'Điện thoại dưới 15 triệu?',
-  'Sản phẩm bán chạy nhất?',
-  'Đồ gia dụng giá tốt?',
+  'Gốm sứ Bát Tràng làm quà tặng?',
+  'Đồ mây tre đan decor nhà?',
+  'Nến thơm thư giãn tự nhiên?',
+  'Khăn và túi thêu tay thủ công?',
 ];
 
 export default function ChatBot({ onAddToCart }) {
@@ -207,7 +207,7 @@ export default function ChatBot({ onAddToCart }) {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Hỏi mình về sản phẩm..."
+              placeholder="Hỏi về đồ thủ công, quà tặng, gốm sứ..."
               rows={1}
               className="flex-1 resize-none text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-soopi-300 focus:border-soopi-400 max-h-24 scrollbar-hide"
               style={{ lineHeight: '1.4' }}

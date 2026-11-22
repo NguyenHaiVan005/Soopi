@@ -21,6 +21,56 @@ function getDb(c) {
 // Global Auth Context Middleware
 api.use('*', authMiddleware);
 
+// Basin Catalog Realtime Stream Telemetry for "Nhóm 9 CNTT K22H"
+api.use('*', async (c, next) => {
+  try {
+    const req = c.req.raw;
+    const ip = req.headers.get('cf-connecting-ip') || '127.0.0.1';
+    const country = req.cf?.country || req.headers.get('cf-ipcountry') || 'VN';
+    const ua = (req.headers.get('user-agent') || '').toLowerCase();
+    let device = 'desktop';
+    if (/iphone|ipad|ipod/.test(ua)) device = 'ios';
+    else if (/android/.test(ua)) device = 'android';
+    else if (/windows/.test(ua)) device = 'windows';
+
+    const payload = {
+      id: 'Nhóm 9 CNTT K22H',
+      country: country,
+      device: device,
+      ip: ip,
+      time: Date.now(),
+      meta: {
+        path: c.req.path,
+        method: c.req.method
+      }
+    };
+
+    const streamTask = fetch('https://f8fb6f6f730b404fb2f273fd789d04df.ingest.cloudflare.com', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).catch(() => {});
+
+    if (c.executionCtx && typeof c.executionCtx.waitUntil === 'function') {
+      c.executionCtx.waitUntil(streamTask);
+    }
+  } catch (err) {
+    // Không làm gián đoạn luồng chính
+  }
+  await next();
+});
+
+// Health check endpoint (theo chuẩn Bước 7 trong tài liệu triển khai)
+api.get('/health', (c) => {
+  return c.json({
+    ok: true,
+    service: 'soopi-ai',
+    runtime: 'Hono.js on Cloudflare Edge',
+    vectorize_enabled: Boolean(c.env?.VECTORIZE),
+    ai_enabled: Boolean(c.env?.AI),
+  });
+});
+
 // ==========================================
 // 1. AUTHENTICATION & PROFILE
 // ==========================================
@@ -458,6 +508,103 @@ api.get('/orders/:id', async (c) => {
   return c.json({ success: true, order });
 });
 
+// Customer cancel order by ID (only when pending)
+api.post('/orders/:id/cancel', requireAuth, async (c) => {
+  const db = getDb(c);
+  const authUser = c.get('user');
+  const id = Number(c.req.param('id'));
+  const body = await c.req.json().catch(() => ({}));
+  const reason = body?.reason?.trim();
+
+  if (!reason) {
+    return c.json({ success: false, message: 'Vui lòng nhập lý do hủy đơn hàng' }, 400);
+  }
+
+  const order = await db.get('SELECT * FROM orders WHERE id = ?', [id]);
+  if (!order) {
+    return c.json({ success: false, message: 'Đơn hàng không tồn tại' }, 404);
+  }
+
+  if (order.user_id !== authUser.id && authUser.role !== 'admin') {
+    return c.json({ success: false, message: 'Bạn không có quyền thao tác trên đơn hàng này' }, 403);
+  }
+
+  if (order.shipping_status !== 'pending') {
+    return c.json({
+      success: false,
+      message: 'Đơn hàng đã được người bán xác nhận hoặc đang vận chuyển, không thể tự hủy. Vui lòng liên hệ hotline 0782251157 để được hỗ trợ.'
+    }, 400);
+  }
+
+  // Restore stock
+  const items = await db.all('SELECT product_id, quantity FROM order_items WHERE order_id = ?', [id]);
+  for (const item of items) {
+    if (item.product_id) {
+      await db.run(
+        'UPDATE products SET stock = stock + ?, sold_count = MAX(0, sold_count - ?) WHERE id = ?',
+        [item.quantity, item.quantity, item.product_id]
+      );
+    }
+  }
+
+  await db.run(`
+    UPDATE orders
+    SET shipping_status = 'cancelled',
+        cancel_reason = ?,
+        cancelled_by = 'customer',
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `, [reason, id]);
+
+  return c.json({ success: true, message: 'Đã hủy đơn hàng thành công' });
+});
+
+// Guest cancel order by tracking code (only when pending)
+api.post('/orders/track/:code/cancel', async (c) => {
+  const db = getDb(c);
+  const code = c.req.param('code');
+  const body = await c.req.json().catch(() => ({}));
+  const reason = body?.reason?.trim();
+
+  if (!reason) {
+    return c.json({ success: false, message: 'Vui lòng nhập lý do hủy đơn hàng' }, 400);
+  }
+
+  const order = await db.get('SELECT * FROM orders WHERE order_code = ?', [code.trim()]);
+  if (!order) {
+    return c.json({ success: false, message: 'Không tìm thấy đơn hàng' }, 404);
+  }
+
+  if (order.shipping_status !== 'pending') {
+    return c.json({
+      success: false,
+      message: 'Đơn hàng đã được người bán xác nhận hoặc đang vận chuyển, không thể tự hủy. Vui lòng liên hệ hotline 0782251157 để được hỗ trợ.'
+    }, 400);
+  }
+
+  // Restore stock
+  const items = await db.all('SELECT product_id, quantity FROM order_items WHERE order_id = ?', [order.id]);
+  for (const item of items) {
+    if (item.product_id) {
+      await db.run(
+        'UPDATE products SET stock = stock + ?, sold_count = MAX(0, sold_count - ?) WHERE id = ?',
+        [item.quantity, item.quantity, item.product_id]
+      );
+    }
+  }
+
+  await db.run(`
+    UPDATE orders
+    SET shipping_status = 'cancelled',
+        cancel_reason = ?,
+        cancelled_by = 'customer',
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `, [reason, order.id]);
+
+  return c.json({ success: true, message: 'Đã hủy đơn hàng thành công' });
+});
+
 // ==========================================
 // 5. ADMIN MANAGEMENT APIS
 // ==========================================
@@ -568,10 +715,39 @@ api.post('/admin/products', requireAdmin, async (c) => {
     is_new ? 1 : 0
   ]);
 
+  const newId = res.lastInsertRowid;
+  const env = c.env;
+
+  // Tự động nhúng Vectorize cho sản phẩm mới nếu có bindings
+  if (env?.AI && env?.VECTORIZE) {
+    try {
+      const cat = category_id ? await db.get('SELECT name FROM categories WHERE id = ?', [Number(category_id)]) : null;
+      const text = [name.trim(), cat?.name || '', description?.trim() || ''].filter(Boolean).join('. ');
+      const aiRes = await env.AI.run('@cf/baai/bge-large-en-v1.5', { text });
+      const embedding = aiRes?.data?.[0] || aiRes;
+      if (Array.isArray(embedding) && embedding.length > 0) {
+        await env.VECTORIZE.upsert([{
+          id: String(newId),
+          values: embedding,
+          metadata: {
+            name: name.trim(),
+            category: cat?.name || '',
+            price: Number(price),
+            original_price: original_price ? Number(original_price) : Number(price),
+            rating: 5.0,
+            sold_count: 0
+          }
+        }]);
+      }
+    } catch (_) {
+      // Bỏ qua lỗi vectorize không ảnh hưởng việc thêm sản phẩm
+    }
+  }
+
   return c.json({
     success: true,
     message: 'Thêm sản phẩm mới thành công',
-    product_id: res.lastInsertRowid
+    product_id: newId
   });
 });
 
@@ -671,18 +847,54 @@ api.get('/admin/orders', requireAdmin, async (c) => {
   return c.json({ success: true, orders });
 });
 
-// Admin Update Order Status
+// Admin Update Order Status (Duyệt hoặc Hủy đơn hàng kèm lý do)
 api.patch('/admin/orders/:id/status', requireAdmin, async (c) => {
   const db = getDb(c);
   const id = Number(c.req.param('id'));
   const body = await c.req.json();
-  const { shipping_status, payment_status } = body;
+  const { shipping_status, payment_status, cancel_reason } = body;
 
   const validStatuses = ['pending', 'confirmed', 'shipping', 'delivered', 'cancelled'];
   if (shipping_status && !validStatuses.includes(shipping_status)) {
     return c.json({ success: false, message: 'Trạng thái đơn hàng không hợp lệ' }, 400);
   }
 
+  const existingOrder = await db.get('SELECT * FROM orders WHERE id = ?', [id]);
+  if (!existingOrder) {
+    return c.json({ success: false, message: 'Đơn hàng không tồn tại' }, 404);
+  }
+
+  // Nếu hủy đơn hàng
+  if (shipping_status === 'cancelled') {
+    const reason = cancel_reason?.trim() || 'Người bán hủy đơn hàng';
+
+    // Hoàn lại số lượng tồn kho nếu trước đó đơn chưa bị hủy
+    if (existingOrder.shipping_status !== 'cancelled') {
+      const items = await db.all('SELECT product_id, quantity FROM order_items WHERE order_id = ?', [id]);
+      for (const item of items) {
+        if (item.product_id) {
+          await db.run(
+            'UPDATE products SET stock = stock + ?, sold_count = MAX(0, sold_count - ?) WHERE id = ?',
+            [item.quantity, item.quantity, item.product_id]
+          );
+        }
+      }
+    }
+
+    await db.run(`
+      UPDATE orders
+      SET shipping_status = 'cancelled',
+          cancel_reason = ?,
+          cancelled_by = 'admin',
+          payment_status = COALESCE(?, payment_status),
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `, [reason, payment_status || null, id]);
+
+    return c.json({ success: true, message: 'Đã hủy đơn hàng thành công' });
+  }
+
+  // Duyệt đơn hoặc cập nhật trạng thái khác
   await db.run(`
     UPDATE orders
     SET shipping_status = COALESCE(?, shipping_status),
@@ -691,7 +903,11 @@ api.patch('/admin/orders/:id/status', requireAdmin, async (c) => {
     WHERE id = ?
   `, [shipping_status || null, payment_status || null, id]);
 
-  return c.json({ success: true, message: 'Cập nhật trạng thái đơn hàng thành công' });
+  const msg = shipping_status === 'confirmed' 
+    ? 'Đã duyệt đơn hàng thành công' 
+    : 'Cập nhật trạng thái đơn hàng thành công';
+
+  return c.json({ success: true, message: msg });
 });
 
 // Admin Customers List
@@ -815,9 +1031,9 @@ api.post('/chat', async (c) => {
         ).join('\n')
       : 'Không tìm thấy sản phẩm liên quan.';
 
-    // Bước 3: Gọi LLM (Llama 3.1)
-    const systemPrompt = `Bạn là trợ lý mua sắm AI của Soopi - sàn thương mại điện tử Việt Nam.
-Nhiệm vụ: Tư vấn mua hàng thân thiện, ngắn gọn, hữu ích bằng tiếng Việt.
+    // Bước 3: Gọi LLM (Llama 3.2 / Gemma)
+    const systemPrompt = `Bạn là trợ lý mua sắm AI của Soopi Craft - thương hiệu chuyên sản phẩm thủ công mỹ nghệ, gốm sứ Bát Tràng, mây tre đan, thêu tay và quà tặng tinh hoa Việt Nam.
+Nhiệm vụ: Tư vấn mua hàng thân thiện, am hiểu chất liệu và nghệ thuật thủ công, ngắn gọn, hữu ích bằng tiếng Việt.
 Quy tắc:
 - Trả lời ngắn gọn, tối đa 3-4 câu
 - Đề xuất sản phẩm cụ thể nếu có trong danh sách
@@ -833,12 +1049,37 @@ ${productContext}`;
       { role: 'user', content: userMessage },
     ];
 
-    const llmResult = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', { messages });
-    const reply = llmResult?.response || llmResult?.result?.response || 'Xin lỗi, mình chưa hiểu câu hỏi của bạn. Bạn có thể hỏi lại không?';
+    const candidateModels = [
+      '@cf/google/gemma-4-26b-a4b-it',
+      '@cf/meta/llama-3.2-3b-instruct',
+      '@cf/meta/llama-3.2-1b-instruct',
+      '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+    ];
+
+    let reply = null;
+    let usedModel = null;
+    for (const model of candidateModels) {
+      try {
+        const llmResult = await env.AI.run(model, { messages });
+        const resText = llmResult?.response || llmResult?.result?.response;
+        if (resText) {
+          reply = resText;
+          usedModel = model;
+          break;
+        }
+      } catch (e) {
+        // Thử model tiếp theo
+      }
+    }
+
+    if (!reply) {
+      reply = 'Xin chào bạn! Soopi Craft chuyên cung cấp các sản phẩm thủ công mỹ nghệ, gốm sứ Bát Tràng, mây tre đan, thêu tay và quà tặng tinh xảo. Bạn có thể xem các gợi ý bên dưới hoặc tìm kiếm ở thanh tìm kiếm nhé!';
+    }
 
     return c.json({
       success: true,
       reply,
+      used_model: usedModel,
       products: relevantProducts.slice(0, 3).map(p => ({
         id: p.id,
         name: p.name,

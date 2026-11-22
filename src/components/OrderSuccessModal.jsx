@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { CheckCircle2, Copy, Check, ArrowRight, Package, Truck, ShoppingBag } from 'lucide-react';
+import { CheckCircle2, Copy, Check, ArrowRight, Package, Truck, ShoppingBag, QrCode } from 'lucide-react';
 import { formatVND } from '../utils/format';
+import BankTransferQR from './BankTransferQR';
 
 export default function OrderSuccessModal({ order, onClose, onTrackOrder }) {
   const [copied, setCopied] = useState(false);
@@ -13,23 +14,25 @@ export default function OrderSuccessModal({ order, onClose, onTrackOrder }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const isBankTransfer = order.payment_method === 'BANK_TRANSFER';
+
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="relative bg-white rounded-3xl max-w-lg w-full shadow-2xl p-6 sm:p-8 text-center animate-in fade-in zoom-in-95 duration-200">
+      <div className={`relative bg-white rounded-3xl ${isBankTransfer ? 'max-w-xl' : 'max-w-lg'} w-full max-h-[92vh] overflow-y-auto shadow-2xl p-6 sm:p-8 text-center animate-in fade-in zoom-in-95 duration-200`}>
         {/* Animated Checkmark Badge */}
-        <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-4 animate-bounce">
-          <CheckCircle2 className="w-10 h-10" />
+        <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-3 animate-bounce">
+          <CheckCircle2 className="w-8 h-8 sm:w-10 sm:h-10" />
         </div>
 
         <h2 className="text-xl sm:text-2xl font-black text-gray-900 mb-1">
           Đặt Hàng Thành Công!
         </h2>
-        <p className="text-xs sm:text-sm text-gray-500 mb-6">
+        <p className="text-xs sm:text-sm text-gray-500 mb-5">
           Cảm ơn bạn đã tin tưởng mua sắm tại Soopi. Đơn hàng của bạn đang được xử lý và chuẩn bị đóng gói.
         </p>
 
         {/* Order Code Box */}
-        <div className="bg-orange-50/80 border border-orange-200/80 rounded-2xl p-4 mb-6 text-left">
+        <div className="bg-orange-50/80 border border-orange-200/80 rounded-2xl p-4 mb-5 text-left">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-gray-500">Mã đơn hàng:</span>
             <button
@@ -61,14 +64,21 @@ export default function OrderSuccessModal({ order, onClose, onTrackOrder }) {
             <div>
               <span className="text-gray-400 block">Thanh toán:</span>
               <span className="font-bold text-gray-800">
-                {order.payment_method === 'COD' ? 'Khi nhận hàng (COD)' : 'Chuyển khoản'}
+                {isBankTransfer ? 'Chuyển khoản VietQR' : 'Khi nhận hàng (COD)'}
               </span>
             </div>
           </div>
         </div>
 
+        {/* Bank Transfer QR Section if Payment Method is BANK_TRANSFER */}
+        {isBankTransfer && (
+          <div className="mb-5">
+            <BankTransferQR orderCode={order.order_code} amount={order.total_amount} />
+          </div>
+        )}
+
         {/* Benefits reminder */}
-        <div className="bg-gray-50 rounded-xl p-3 mb-6 text-[11px] text-gray-600 flex items-center justify-center gap-4">
+        <div className="bg-gray-50 rounded-xl p-3 mb-5 text-[11px] text-gray-600 flex items-center justify-center gap-4">
           <span className="flex items-center gap-1">
             <Truck className="w-3.5 h-3.5 text-orange-500" /> Giao hàng 2-3 ngày
           </span>

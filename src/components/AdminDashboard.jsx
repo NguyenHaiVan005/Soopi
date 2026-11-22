@@ -22,7 +22,9 @@ import {
   Eye,
   ArrowUpRight,
   TrendingUp,
-  Tag
+  Tag,
+  Sparkles,
+  PackageCheck
 } from 'lucide-react';
 import { api } from '../api/client';
 import { formatVND, formatDate, getOrderStatusBadge } from '../utils/format';
@@ -48,6 +50,8 @@ export default function AdminDashboard({ onClose }) {
   const [orderFilterStatus, setOrderFilterStatus] = useState('all');
   const [orderSearch, setOrderSearch] = useState('');
   const [selectedOrderForDetail, setSelectedOrderForDetail] = useState(null);
+  const [orderToCancel, setOrderToCancel] = useState(null);
+  const [cancellingOrder, setCancellingOrder] = useState(false);
 
   // Customers state
   const [customers, setCustomers] = useState([]);
@@ -107,12 +111,11 @@ export default function AdminDashboard({ onClose }) {
     }
   };
 
-  const loadOrders = async () => {
+  const loadOrders = async (query = orderSearch) => {
     setLoadingOrders(true);
     try {
       const params = {};
-      if (orderFilterStatus !== 'all') params.status = orderFilterStatus;
-      if (orderSearch.trim()) params.q = orderSearch.trim();
+      if (query && query.trim()) params.q = query.trim();
       const res = await api.admin.getOrders(params);
       if (res.success) {
         setOrders(res.orders || []);
@@ -167,7 +170,7 @@ export default function AdminDashboard({ onClose }) {
       if (newPaymentStatus) payload.payment_status = newPaymentStatus;
 
       await api.admin.updateOrderStatus(orderId, payload);
-      showNotice('Cập nhật trạng thái đơn hàng thành công');
+      showNotice(newShippingStatus === 'confirmed' ? 'Đã duyệt đơn hàng thành công' : 'Cập nhật trạng thái đơn hàng thành công');
       loadOrders();
       if (selectedOrderForDetail && selectedOrderForDetail.id === orderId) {
         setSelectedOrderForDetail((prev) => ({
@@ -177,6 +180,33 @@ export default function AdminDashboard({ onClose }) {
       }
     } catch (err) {
       showNotice(err.message, true);
+    }
+  };
+
+  // Confirm cancel order with reason
+  const handleConfirmCancelOrder = async (reason) => {
+    if (!orderToCancel) return;
+    setCancellingOrder(true);
+    try {
+      await api.admin.updateOrderStatus(orderToCancel.id, {
+        shipping_status: 'cancelled',
+        cancel_reason: reason
+      });
+      showNotice('Đã hủy đơn hàng thành công');
+      setOrderToCancel(null);
+      loadOrders();
+      if (selectedOrderForDetail && selectedOrderForDetail.id === orderToCancel.id) {
+        setSelectedOrderForDetail((prev) => ({
+          ...prev,
+          shipping_status: 'cancelled',
+          cancel_reason: reason,
+          cancelled_by: 'admin'
+        }));
+      }
+    } catch (err) {
+      showNotice(err.message, true);
+    } finally {
+      setCancellingOrder(false);
     }
   };
 
@@ -219,6 +249,20 @@ export default function AdminDashboard({ onClose }) {
     (c.phone && c.phone.includes(customerSearch))
   );
 
+  const filteredOrders = orders.filter((o) => {
+    if (orderFilterStatus !== 'all' && o.shipping_status !== orderFilterStatus) {
+      return false;
+    }
+    if (orderSearch.trim()) {
+      const q = orderSearch.toLowerCase();
+      const matchCode = o.order_code?.toLowerCase().includes(q);
+      const matchName = o.customer_name?.toLowerCase().includes(q);
+      const matchPhone = o.customer_phone?.toLowerCase().includes(q);
+      if (!matchCode && !matchName && !matchPhone) return false;
+    }
+    return true;
+  });
+
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-gray-900/60 backdrop-blur-xs flex">
       {/* Toast Notice */}
@@ -253,6 +297,16 @@ export default function AdminDashboard({ onClose }) {
 
           <div className="flex items-center gap-2">
             <button
+              onClick={() => {
+                setSelectedProductForEdit(null);
+                setShowProductModal(true);
+              }}
+              className="px-3.5 py-2 rounded-xl bg-soopi-500 hover:bg-soopi-600 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm hover:shadow-orange-500/20 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ Thêm Sản Phẩm Vào Kệ Hàng</span>
+            </button>
+            <button
               onClick={onClose}
               className="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
             >
@@ -285,7 +339,7 @@ export default function AdminDashboard({ onClose }) {
             }`}
           >
             <Package className="w-4 h-4" />
-            <span>Quản Lý Sản Phẩm</span>
+            <span>Kệ Hàng & Kho Sản Phẩm ({products.length})</span>
           </button>
 
           <button
@@ -396,7 +450,8 @@ export default function AdminDashboard({ onClose }) {
                             key={stKey}
                             onClick={() => {
                               setOrderFilterStatus(stKey);
-                              handleTabChange('orders');
+                              setActiveTab('orders');
+                              loadOrders();
                             }}
                             className="p-3.5 rounded-xl border border-gray-100 bg-gray-50 hover:bg-orange-50/50 hover:border-orange-200 cursor-pointer transition-all"
                           >
@@ -499,7 +554,7 @@ export default function AdminDashboard({ onClose }) {
                   className="px-4 py-2.5 bg-soopi-500 hover:bg-soopi-600 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>Thêm Sản Phẩm Mới</span>
+                  <span>+ Thêm Sản Phẩm Vào Kệ Hàng</span>
                 </button>
               </div>
 
@@ -523,7 +578,7 @@ export default function AdminDashboard({ onClose }) {
                           <th className="py-3 px-4">Sản phẩm</th>
                           <th className="py-3 px-4">Danh mục</th>
                           <th className="py-3 px-4">Giá bán</th>
-                          <th className="py-3 px-4">Kho</th>
+                          <th className="py-3 px-4">Trạng thái kệ hàng</th>
                           <th className="py-3 px-4">Đã bán</th>
                           <th className="py-3 px-4">Nhãn</th>
                           <th className="py-3 px-4 text-right">Thao tác</th>
@@ -553,9 +608,17 @@ export default function AdminDashboard({ onClose }) {
                               )}
                             </td>
                             <td className="py-3 px-4">
-                              <span className={`font-bold ${p.stock <= 5 ? 'text-red-500' : 'text-gray-800'}`}>
-                                {p.stock}
-                              </span>
+                              {p.stock > 0 ? (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                  Trên kệ: {p.stock}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-50 text-red-600 border border-red-200">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                                  Hết trên kệ
+                                </span>
+                              )}
                             </td>
                             <td className="py-3 px-4 text-gray-500 font-semibold">{p.sold_count || 0}</td>
                             <td className="py-3 px-4">
@@ -615,10 +678,7 @@ export default function AdminDashboard({ onClose }) {
                   ].map((f) => (
                     <button
                       key={f.id}
-                      onClick={() => {
-                        setOrderFilterStatus(f.id);
-                        setTimeout(loadOrders, 0);
-                      }}
+                      onClick={() => setOrderFilterStatus(f.id)}
                       className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         orderFilterStatus === f.id
                           ? 'bg-soopi-500 text-white shadow-sm'
@@ -630,16 +690,27 @@ export default function AdminDashboard({ onClose }) {
                   ))}
                 </div>
 
-                <div className="relative">
-                  <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={orderSearch}
-                    onChange={(e) => setOrderSearch(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && loadOrders()}
-                    placeholder="Mã đơn / tên / SĐT khách..."
-                    className="pl-9 pr-4 py-2 rounded-xl border border-gray-200 focus:border-soopi-500 focus:ring-2 focus:ring-soopi-500/20 text-xs outline-none w-64"
-                  />
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={orderSearch}
+                      onChange={(e) => setOrderSearch(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && loadOrders()}
+                      placeholder="Mã đơn / tên / SĐT khách..."
+                      className="pl-9 pr-4 py-2 rounded-xl border border-gray-200 focus:border-soopi-500 focus:ring-2 focus:ring-soopi-500/20 text-xs outline-none w-60"
+                    />
+                  </div>
+
+                  <button
+                    onClick={() => loadOrders()}
+                    disabled={loadingOrders}
+                    className="p-2 bg-gray-100 hover:bg-orange-50 hover:text-soopi-600 text-gray-600 rounded-xl transition-colors cursor-pointer"
+                    title="Tải lại danh sách đơn hàng"
+                  >
+                    <RotateCcw className={`w-4 h-4 ${loadingOrders ? 'animate-spin' : ''}`} />
+                  </button>
                 </div>
               </div>
 
@@ -650,7 +721,7 @@ export default function AdminDashboard({ onClose }) {
                     <div className="w-8 h-8 border-3 border-soopi-500 border-t-transparent rounded-full animate-spin mb-2"></div>
                     <p className="text-xs">Đang tải danh sách đơn hàng...</p>
                   </div>
-                ) : orders.length === 0 ? (
+                ) : filteredOrders.length === 0 ? (
                   <div className="text-center py-12 text-gray-400">
                     <ShoppingCart className="w-10 h-10 mx-auto mb-2 text-gray-300" />
                     <p className="text-sm font-semibold text-gray-700">Không có đơn hàng nào phù hợp</p>
@@ -670,7 +741,7 @@ export default function AdminDashboard({ onClose }) {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        {orders.map((o) => {
+                        {filteredOrders.map((o) => {
                           const badge = getOrderStatusBadge(o.shipping_status);
                           return (
                             <tr key={o.id} className="hover:bg-gray-50/80 transition-colors">
@@ -689,25 +760,53 @@ export default function AdminDashboard({ onClose }) {
                                   <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`}></span>
                                   {badge.label}
                                 </span>
+                                {o.shipping_status === 'cancelled' && (
+                                  <div className="mt-1 text-[10px] text-red-600 max-w-[190px] leading-tight" title={o.cancel_reason || 'Không rõ lý do'}>
+                                    <span className="font-semibold block truncate">Lý do: {o.cancel_reason || 'Không có lý do'}</span>
+                                    <span className="text-gray-400">({o.cancelled_by === 'customer' ? 'Khách hủy' : 'Admin hủy'})</span>
+                                  </div>
+                                )}
                               </td>
                               <td className="py-3 px-4 text-right">
                                 <div className="flex items-center justify-end gap-1.5">
                                   {o.shipping_status === 'pending' && (
-                                    <button
-                                      onClick={() => handleUpdateOrderStatus(o.id, 'confirmed')}
-                                      className="px-2.5 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg font-bold text-[11px] transition-colors cursor-pointer"
-                                    >
-                                      Xác nhận
-                                    </button>
+                                    <>
+                                      <button
+                                        onClick={() => handleUpdateOrderStatus(o.id, 'confirmed')}
+                                        className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[11px] transition-colors cursor-pointer flex items-center gap-1 shadow-xs"
+                                        title="Duyệt đơn hàng này"
+                                      >
+                                        <CheckCircle className="w-3.5 h-3.5" />
+                                        <span>Duyệt</span>
+                                      </button>
+                                      <button
+                                        onClick={() => setOrderToCancel(o)}
+                                        className="px-2.5 py-1 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded-lg font-bold text-[11px] transition-colors cursor-pointer flex items-center gap-1"
+                                        title="Hủy đơn hàng"
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                        <span>Hủy</span>
+                                      </button>
+                                    </>
                                   )}
 
                                   {o.shipping_status === 'confirmed' && (
-                                    <button
-                                      onClick={() => handleUpdateOrderStatus(o.id, 'shipping')}
-                                      className="px-2.5 py-1 bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-lg font-bold text-[11px] transition-colors cursor-pointer"
-                                    >
-                                      Giao hàng
-                                    </button>
+                                    <>
+                                      <button
+                                        onClick={() => handleUpdateOrderStatus(o.id, 'shipping')}
+                                        className="px-2.5 py-1 bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-lg font-bold text-[11px] transition-colors cursor-pointer flex items-center gap-1"
+                                      >
+                                        <Truck className="w-3.5 h-3.5" />
+                                        <span>Giao hàng</span>
+                                      </button>
+                                      <button
+                                        onClick={() => setOrderToCancel(o)}
+                                        className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                        title="Hủy đơn"
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
+                                    </>
                                   )}
 
                                   {o.shipping_status === 'shipping' && (
@@ -867,6 +966,17 @@ export default function AdminDashboard({ onClose }) {
           onStatusUpdated={(newStatus, payment) => {
             handleUpdateOrderStatus(selectedOrderForDetail.id, newStatus, payment);
           }}
+          onOpenCancel={(ord) => setOrderToCancel(ord)}
+        />
+      )}
+
+      {/* MODAL 2.5: CANCEL ORDER WITH REASON */}
+      {orderToCancel && (
+        <AdminCancelOrderModal
+          order={orderToCancel}
+          onClose={() => setOrderToCancel(null)}
+          onConfirm={(reason) => handleConfirmCancelOrder(reason)}
+          cancelling={cancellingOrder}
         />
       )}
 
@@ -881,7 +991,147 @@ export default function AdminDashboard({ onClose }) {
   );
 }
 
-// Subcomponent: Add / Edit Product Modal
+// Subcomponent: Admin Cancel Order Modal with Reason
+function AdminCancelOrderModal({ order, onClose, onConfirm, cancelling }) {
+  const [reason, setReason] = useState('');
+  const quickReasons = [
+    'Sản phẩm tạm thời hết hàng / ngưng sản xuất',
+    'Không thể liên hệ được với người nhận qua số điện thoại',
+    'Địa chỉ giao hàng nằm ngoài vùng phục vụ',
+    'Khách hàng gọi điện yêu cầu hủy đơn',
+    'Thông tin đặt hàng có dấu hiệu không chính xác',
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[60] overflow-y-auto bg-gray-900/70 backdrop-blur-xs flex items-center justify-center p-4">
+      <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-red-50/50">
+          <div className="flex items-center gap-2 text-red-700">
+            <AlertCircle className="w-5 h-5 text-red-600" />
+            <h3 className="font-bold text-sm">Hủy Đơn Hàng {order.order_code}</h3>
+          </div>
+          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-700 cursor-pointer">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={(e) => { e.preventDefault(); onConfirm(reason); }} className="p-5 space-y-4 text-xs">
+          <div>
+            <p className="text-gray-600 mb-2">
+              Vui lòng nhập lý do hủy đơn. Lý do này sẽ được <b>hiển thị cho khách hàng</b> khi tra cứu đơn hàng:
+            </p>
+
+            <div className="space-y-1.5 mb-3">
+              <span className="text-[11px] text-gray-400 font-semibold block">Gợi ý lý do nhanh:</span>
+              {quickReasons.map((qr) => (
+                <button
+                  key={qr}
+                  type="button"
+                  onClick={() => setReason(qr)}
+                  className={`w-full text-left p-2 rounded-xl border text-[11px] transition-all cursor-pointer ${
+                    reason === qr
+                      ? 'border-red-400 bg-red-50 text-red-800 font-bold'
+                      : 'border-gray-200 hover:bg-gray-50 text-gray-700'
+                  }`}
+                >
+                  {qr}
+                </button>
+              ))}
+            </div>
+
+            <label className="block font-semibold text-gray-700 mb-1">Hoặc nhập lý do chi tiết *</label>
+            <textarea
+              required
+              rows={3}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Nhập lý do hủy để thông báo đến khách hàng..."
+              className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 text-gray-900 outline-none"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={cancelling}
+              className="px-4 py-2 rounded-xl border border-gray-200 text-gray-700 font-bold hover:bg-gray-50 cursor-pointer"
+            >
+              Quay lại
+            </button>
+            <button
+              type="submit"
+              disabled={cancelling || !reason.trim()}
+              className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+            >
+              {cancelling ? 'Đang hủy...' : 'Xác nhận hủy đơn'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// Subcomponent: Add / Edit Product Modal - Kệ Hàng Soopi
+const CRAFT_PRESETS = [
+  {
+    shortTitle: 'Ấm chén Bát Tràng',
+    name: 'Bộ Ấm Chén Tử Sa Bát Tràng Men Hỏa Biến',
+    price: 650000,
+    original_price: 850000,
+    stock: 35,
+    image_url: 'https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?auto=format&fit=crop&q=80&w=800',
+    description: 'Chế tác từ đất tử sa Bát Tràng nung ở nhiệt độ 1300 độ C. Nước men hỏa biến tự nhiên biến ảo theo nhiệt độ lò, giữ trọn hương vị trà thượng hạng.',
+    is_featured: 1,
+    is_new: 1
+  },
+  {
+    shortTitle: 'Khăn lụa Vạn Phúc',
+    name: 'Khăn Lụa Tơ Tằm Vạn Phúc Dệt Hoa Văn Hoa Sen',
+    price: 480000,
+    original_price: 600000,
+    stock: 50,
+    image_url: 'https://images.unsplash.com/photo-1606760227091-3dd870d97f1d?auto=format&fit=crop&q=80&w=800',
+    description: 'Dệt 100% từ tơ tằm tự nhiên tại làng lụa Vạn Phúc (Hà Đông). Hoa văn hoa sen chìm tinh xảo, bề mặt mềm mại, óng ả và thân thiện với làn da.',
+    is_featured: 1,
+    is_new: 1
+  },
+  {
+    shortTitle: 'Nón bài thơ xứ Huế',
+    name: 'Nón Lá Bài Thơ Xứ Huế Chằm Thủ Công',
+    price: 220000,
+    original_price: 280000,
+    stock: 40,
+    image_url: 'https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&q=80&w=800',
+    description: 'Nón bài thơ truyền thống do nghệ nhân làng Tây Hồ (Huế) chằm thủ công tỉ mỉ. Khi soi lên ánh sáng sẽ thấy bài thơ và hình ảnh chùa Thiên Mụ ẩn hiện.',
+    is_featured: 0,
+    is_new: 1
+  },
+  {
+    shortTitle: 'Khay mây Phú Vinh',
+    name: 'Khay Trà Mây Tre Đan Xuất Khẩu Phú Vinh',
+    price: 290000,
+    original_price: 350000,
+    stock: 60,
+    image_url: 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?auto=format&fit=crop&q=80&w=800',
+    description: 'Sử dụng mây và tre cật bánh tẻ đã qua xử lý luộc sấy chống mối mọt. Đan cài hoa văn tinh xảo, phù hợp bày biện phòng khách và bàn trà thiền.',
+    is_featured: 1,
+    is_new: 1
+  },
+  {
+    shortTitle: 'Hộp sơn mài Hạ Thái',
+    name: 'Hộp Đựng Trang Sức Sơn Mài Cẩn Trứng Hạ Thái',
+    price: 550000,
+    original_price: 700000,
+    stock: 25,
+    image_url: 'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?auto=format&fit=crop&q=80&w=800',
+    description: 'Quy trình sơn mài truyền thống 12 lớp mài nước bóng láng. Kỹ thuật cẩn vỏ trứng độc đáo tạo nên bức họa hoa mai thanh tao và sang trọng.',
+    is_featured: 1,
+    is_new: 0
+  }
+];
+
 function ProductFormModal({ product, categories, onClose, onSaved }) {
   const [formData, setFormData] = useState({
     name: product?.name || '',
@@ -897,6 +1147,21 @@ function ProductFormModal({ product, categories, onClose, onSaved }) {
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  const applyPreset = (preset) => {
+    setFormData((prev) => ({
+      ...prev,
+      name: preset.name,
+      price: preset.price,
+      original_price: preset.original_price,
+      stock: preset.stock,
+      image_url: preset.image_url,
+      description: preset.description,
+      is_featured: preset.is_featured,
+      is_new: preset.is_new,
+      category_id: prev.category_id || (categories[0]?.id || '')
+    }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -915,7 +1180,7 @@ function ProductFormModal({ product, categories, onClose, onSaved }) {
       }
       onSaved();
     } catch (err) {
-      setError(err.message || 'Lỗi lưu sản phẩm');
+      setError(err.message || 'Lỗi lưu sản phẩm vào kệ hàng');
     } finally {
       setSaving(false);
     }
@@ -923,41 +1188,75 @@ function ProductFormModal({ product, categories, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-gray-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl max-w-xl w-full shadow-2xl overflow-hidden my-6 animate-in fade-in zoom-in-95 duration-200">
-        <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="text-base font-bold text-gray-900">
-            {product ? 'Chỉnh Sửa Sản Phẩm' : 'Thêm Sản Phẩm Mới'}
-          </h2>
-          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-700 cursor-pointer">
-            <X className="w-5 h-5" />
+      <div className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden my-6 animate-in fade-in zoom-in-95 duration-200">
+        <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-orange-50/50 to-white">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-soopi-600 to-orange-400 text-white flex items-center justify-center shadow-md shadow-orange-500/20">
+              <PackageCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-gray-900">
+                {product ? 'Chỉnh Sửa Sản Phẩm Trên Kệ Hàng' : 'Thêm Sản Phẩm Mới Vào Kệ Hàng'}
+              </h2>
+              <p className="text-xs text-gray-500">
+                {product ? 'Cập nhật thông tin và số lượng bày bán trên kệ' : 'Điền thông tin để đưa mặt hàng thủ công lên kệ hàng Soopi'}
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 flex items-center justify-center cursor-pointer">
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {error && (
-          <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs">
-            {error}
+          <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{error}</span>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4 text-xs">
+          {/* Mẫu điền nhanh cho sản phẩm mới */}
+          {!product && (
+            <div className="p-3 bg-orange-50/80 border border-orange-200/60 rounded-2xl">
+              <p className="text-[11px] font-bold text-soopi-800 mb-1.5 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-soopi-600" />
+                <span>Gợi ý mẫu sản phẩm thủ công (Bấm để điền nhanh):</span>
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {CRAFT_PRESETS.map((preset) => (
+                  <button
+                    key={preset.shortTitle}
+                    type="button"
+                    onClick={() => applyPreset(preset)}
+                    className="px-2.5 py-1 bg-white hover:bg-orange-100 text-gray-700 hover:text-soopi-700 text-[11px] font-semibold rounded-lg border border-orange-200/80 shadow-2xs transition-colors cursor-pointer"
+                  >
+                    + {preset.shortTitle}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div>
-            <label className="block font-semibold text-gray-700 mb-1">Tên sản phẩm *</label>
+            <label className="block font-semibold text-gray-700 mb-1">Tên sản phẩm thủ công *</label>
             <input
               type="text"
               required
+              placeholder="Ví dụ: Bộ Ấm Chén Tử Sa Bát Tràng..."
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 focus:border-soopi-500 focus:ring-2 focus:ring-soopi-500/20 text-gray-900 outline-none"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 focus:border-soopi-500 focus:ring-2 focus:ring-soopi-500/20 text-gray-900 outline-none text-xs"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block font-semibold text-gray-700 mb-1">Danh mục *</label>
+              <label className="block font-semibold text-gray-700 mb-1">Danh mục làng nghề *</label>
               <select
                 value={formData.category_id}
                 onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 focus:border-soopi-500 text-gray-900 outline-none"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 focus:border-soopi-500 text-gray-900 outline-none text-xs bg-white"
               >
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -968,28 +1267,30 @@ function ProductFormModal({ product, categories, onClose, onSaved }) {
             </div>
 
             <div>
-              <label className="block font-semibold text-gray-700 mb-1">Số lượng kho *</label>
+              <label className="block font-semibold text-gray-700 mb-1">Số lượng đưa lên kệ hàng *</label>
               <input
                 type="number"
                 min="0"
                 required
+                placeholder="50"
                 value={formData.stock}
                 onChange={(e) => setFormData({ ...formData, stock: parseInt(e.target.value, 10) || 0 })}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 focus:border-soopi-500 text-gray-900 outline-none"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 focus:border-soopi-500 text-gray-900 outline-none text-xs"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block font-semibold text-gray-700 mb-1">Giá bán hiện tại (VND) *</label>
+              <label className="block font-semibold text-gray-700 mb-1">Giá bán trên kệ (VND) *</label>
               <input
                 type="number"
                 min="1000"
                 required
+                placeholder="Ví dụ: 350000"
                 value={formData.price}
                 onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 focus:border-soopi-500 text-gray-900 outline-none"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 focus:border-soopi-500 text-gray-900 outline-none text-xs font-mono font-bold"
               />
             </div>
 
@@ -997,32 +1298,46 @@ function ProductFormModal({ product, categories, onClose, onSaved }) {
               <label className="block font-semibold text-gray-700 mb-1">Giá gốc gạch ngang (VND)</label>
               <input
                 type="number"
+                placeholder="Ví dụ: 450000"
                 value={formData.original_price}
                 onChange={(e) => setFormData({ ...formData, original_price: e.target.value ? parseFloat(e.target.value) : '' })}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 focus:border-soopi-500 text-gray-900 outline-none"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 focus:border-soopi-500 text-gray-900 outline-none text-xs font-mono"
               />
             </div>
           </div>
 
           <div>
             <label className="block font-semibold text-gray-700 mb-1">Đường dẫn hình ảnh (URL) *</label>
-            <input
-              type="url"
-              required
-              placeholder="https://images.unsplash.com/..."
-              value={formData.image_url}
-              onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 focus:border-soopi-500 text-gray-900 outline-none font-mono"
-            />
+            <div className="flex gap-3 items-center">
+              <input
+                type="url"
+                required
+                placeholder="https://images.unsplash.com/..."
+                value={formData.image_url}
+                onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
+                className="flex-1 px-3.5 py-2.5 rounded-xl border border-gray-200 focus:border-soopi-500 text-gray-900 outline-none font-mono text-xs"
+              />
+              {formData.image_url && (
+                <div className="w-12 h-12 rounded-xl border border-gray-200 overflow-hidden shrink-0 bg-gray-50 flex items-center justify-center">
+                  <img
+                    src={formData.image_url}
+                    alt="Preview"
+                    className="w-full h-full object-cover"
+                    onError={(e) => { e.target.style.display = 'none'; }}
+                  />
+                </div>
+              )}
+            </div>
           </div>
 
           <div>
-            <label className="block font-semibold text-gray-700 mb-1">Mô tả sản phẩm chi tiết</label>
+            <label className="block font-semibold text-gray-700 mb-1">Câu chuyện làng nghề & Mô tả chi tiết</label>
             <textarea
               rows={3}
+              placeholder="Mô tả nguồn gốc, chất liệu tự nhiên, quy trình chế tác thủ công..."
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 focus:border-soopi-500 text-gray-900 outline-none"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 focus:border-soopi-500 text-gray-900 outline-none text-xs"
             />
           </div>
 
@@ -1034,7 +1349,7 @@ function ProductFormModal({ product, categories, onClose, onSaved }) {
                 onChange={(e) => setFormData({ ...formData, is_featured: e.target.checked ? 1 : 0 })}
                 className="rounded text-soopi-600 focus:ring-soopi-500"
               />
-              <span className="font-semibold text-gray-800">Đặt làm sản phẩm Nổi Bật</span>
+              <span className="font-semibold text-gray-800">Đặt làm sản phẩm Nổi Bật trên kệ</span>
             </label>
 
             <label className="flex items-center gap-2 cursor-pointer">
@@ -1044,7 +1359,7 @@ function ProductFormModal({ product, categories, onClose, onSaved }) {
                 onChange={(e) => setFormData({ ...formData, is_new: e.target.checked ? 1 : 0 })}
                 className="rounded text-soopi-600 focus:ring-soopi-500"
               />
-              <span className="font-semibold text-gray-800">Gắn nhãn Hàng Mới</span>
+              <span className="font-semibold text-gray-800">Gắn nhãn Hàng Mới về</span>
             </label>
           </div>
 
@@ -1059,9 +1374,19 @@ function ProductFormModal({ product, categories, onClose, onSaved }) {
             <button
               type="submit"
               disabled={saving}
-              className="px-5 py-2.5 rounded-xl bg-soopi-500 hover:bg-soopi-600 text-white font-bold shadow-md cursor-pointer disabled:opacity-50"
+              className="px-5 py-2.5 rounded-xl bg-soopi-500 hover:bg-soopi-600 text-white font-bold shadow-md cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
             >
-              {saving ? 'Đang lưu...' : 'Lưu sản phẩm'}
+              {saving ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Đang đưa lên kệ...</span>
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4" />
+                  <span>{product ? 'Cập Nhật Kệ Hàng' : 'Đưa Sản Phẩm Lên Kệ Hàng'}</span>
+                </>
+              )}
             </button>
           </div>
         </form>
@@ -1071,7 +1396,7 @@ function ProductFormModal({ product, categories, onClose, onSaved }) {
 }
 
 // Subcomponent: Admin Order Detail & Status Modifier Modal
-function OrderDetailModal({ order, onClose, onStatusUpdated }) {
+function OrderDetailModal({ order, onClose, onStatusUpdated, onOpenCancel }) {
   const badge = getOrderStatusBadge(order.shipping_status);
 
   return (
@@ -1088,6 +1413,22 @@ function OrderDetailModal({ order, onClose, onStatusUpdated }) {
         </div>
 
         <div className="p-6 space-y-5 text-xs">
+          {/* Cancellation reason box (if cancelled) */}
+          {order.shipping_status === 'cancelled' && (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-xs text-red-900">
+              <div className="flex items-center gap-2 font-bold text-red-700 mb-1">
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                <span>Đơn hàng đã bị hủy</span>
+              </div>
+              <p className="text-red-800">
+                <b>Lý do hủy:</b> {order.cancel_reason || 'Không có lý do cụ thể'}
+              </p>
+              <p className="text-[11px] text-red-600 mt-1">
+                Hủy bởi: <b>{order.cancelled_by === 'customer' ? 'Khách hàng yêu cầu hủy' : 'Quản trị viên (Shop)'}</b>
+              </p>
+            </div>
+          )}
+
           {/* Quick status bar */}
           <div className="p-4 rounded-2xl bg-orange-50/50 border border-orange-100 flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -1100,31 +1441,72 @@ function OrderDetailModal({ order, onClose, onStatusUpdated }) {
 
             {/* Change Status Buttons */}
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[11px] text-gray-500 font-semibold">Chuyển sang:</span>
-              <button
-                onClick={() => onStatusUpdated('confirmed')}
-                className="px-2.5 py-1 bg-blue-100 text-blue-800 hover:bg-blue-200 rounded-lg font-bold text-[11px] cursor-pointer"
-              >
-                Đã xác nhận
-              </button>
-              <button
-                onClick={() => onStatusUpdated('shipping')}
-                className="px-2.5 py-1 bg-purple-100 text-purple-800 hover:bg-purple-200 rounded-lg font-bold text-[11px] cursor-pointer"
-              >
-                Đang giao
-              </button>
-              <button
-                onClick={() => onStatusUpdated('delivered', 'paid')}
-                className="px-2.5 py-1 bg-emerald-100 text-emerald-800 hover:bg-emerald-200 rounded-lg font-bold text-[11px] cursor-pointer"
-              >
-                Đã giao & thu tiền
-              </button>
-              <button
-                onClick={() => onStatusUpdated('cancelled')}
-                className="px-2.5 py-1 bg-red-100 text-red-800 hover:bg-red-200 rounded-lg font-bold text-[11px] cursor-pointer"
-              >
-                Hủy đơn
-              </button>
+              <span className="text-[11px] text-gray-500 font-semibold">Thao tác:</span>
+
+              {order.shipping_status === 'pending' && (
+                <>
+                  <button
+                    onClick={() => onStatusUpdated('confirmed')}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs cursor-pointer flex items-center gap-1.5 shadow-sm"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    <span>Duyệt đơn</span>
+                  </button>
+                  <button
+                    onClick={() => onOpenCancel(order)}
+                    className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-xs cursor-pointer flex items-center gap-1.5 shadow-sm"
+                  >
+                    <X className="w-4 h-4" />
+                    <span>Hủy đơn hàng</span>
+                  </button>
+                </>
+              )}
+
+              {order.shipping_status === 'confirmed' && (
+                <>
+                  <button
+                    onClick={() => onStatusUpdated('shipping')}
+                    className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-xs cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Truck className="w-4 h-4" />
+                    <span>Giao hàng</span>
+                  </button>
+                  <button
+                    onClick={() => onOpenCancel(order)}
+                    className="px-2.5 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded-xl font-bold text-xs cursor-pointer"
+                  >
+                    Hủy đơn
+                  </button>
+                </>
+              )}
+
+              {order.shipping_status === 'shipping' && (
+                <>
+                  <button
+                    onClick={() => onStatusUpdated('delivered', 'paid')}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs cursor-pointer flex items-center gap-1.5"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    <span>Đã giao & thu tiền</span>
+                  </button>
+                  <button
+                    onClick={() => onOpenCancel(order)}
+                    className="px-2.5 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded-xl font-bold text-xs cursor-pointer"
+                  >
+                    Hủy đơn
+                  </button>
+                </>
+              )}
+
+              {order.shipping_status === 'cancelled' && (
+                <button
+                  onClick={() => onStatusUpdated('pending')}
+                  className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold text-xs cursor-pointer flex items-center gap-1.5"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Khôi phục lại đơn</span>
+                </button>
+              )}
             </div>
           </div>
 

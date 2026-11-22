@@ -1,21 +1,29 @@
 import React from 'react';
 import { 
-  Smartphone, 
-  Laptop, 
-  Shirt, 
-  Home, 
-  Watch, 
-  BookOpen, 
+  Coffee, 
+  Hammer, 
+  Scissors, 
+  Flame, 
+  Gem, 
+  Gift, 
+  Sparkles,
+  Heart,
+  Palette,
+  Package,
   Layers 
 } from 'lucide-react';
 
 const iconMap = {
-  Smartphone,
-  Laptop,
-  Shirt,
-  Home,
-  Watch,
-  BookOpen,
+  Coffee,
+  Hammer,
+  Scissors,
+  Flame,
+  Gem,
+  Gift,
+  Sparkles,
+  Heart,
+  Palette,
+  Package,
 };
 
 export default function CategoryGrid({ categories = [], selectedCategory, onSelectCategory }) {

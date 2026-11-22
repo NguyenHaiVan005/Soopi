@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { X, Search, Package, Clock, CheckCircle2, Truck, AlertCircle, ShoppingBag } from 'lucide-react';
+import { X, Search, Package, Clock, CheckCircle2, Truck, AlertCircle, ShoppingBag, QrCode } from 'lucide-react';
 import { api } from '../api/client';
 import { formatVND, formatDate, getOrderStatusBadge } from '../utils/format';
+import BankTransferQR from './BankTransferQR';
 
 export default function TrackOrderModal({ initialCode = '', onClose }) {
   const [orderCode, setOrderCode] = useState(initialCode);
   const [loading, setLoading] = useState(false);
   const [order, setOrder] = useState(null);
   const [error, setError] = useState('');
+  const [showQR, setShowQR] = useState(false);
 
   const fetchOrder = async (codeToSearch) => {
     if (!codeToSearch.trim()) return;
@@ -193,8 +195,25 @@ export default function TrackOrderModal({ initialCode = '', onClose }) {
                     <p>Trạng thái thanh toán: <b className={order.payment_status === 'paid' ? 'text-emerald-600' : 'text-amber-600'}>{order.payment_status === 'paid' ? 'Đã thanh toán' : 'Chưa thanh toán'}</b></p>
                     <p>Tổng giá trị đơn: <b className="text-base text-soopi-600">{formatVND(order.total_amount)}</b></p>
                   </div>
+                  {order.payment_method === 'BANK_TRANSFER' && order.payment_status !== 'paid' && (
+                    <button
+                      type="button"
+                      onClick={() => setShowQR(!showQR)}
+                      className="mt-3 w-full py-1.5 px-3 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <QrCode className="w-3.5 h-3.5" />
+                      <span>{showQR ? 'Ẩn mã QR VietinBank' : 'Xem mã QR thanh toán VietinBank'}</span>
+                    </button>
+                  )}
                 </div>
               </div>
+
+              {/* Collapsible QR Transfer Box in Tracking */}
+              {order.payment_method === 'BANK_TRANSFER' && showQR && (
+                <div className="animate-in fade-in duration-200">
+                  <BankTransferQR orderCode={order.order_code} amount={order.total_amount} compact={true} />
+                </div>
+              )}
 
               {/* Ordered Items */}
               {order.items && order.items.length > 0 && (

@@ -109,8 +109,8 @@ export default function BannerSlider({ banners = [], onBannerClick }) {
             <ShieldCheck className="w-5 h-5" />
           </div>
           <div>
-            <h4 className="text-xs font-bold text-gray-900">Chính Hãng 100%</h4>
-            <p className="text-[11px] text-gray-500">Đền gấp đôi nếu giả</p>
+            <h4 className="text-xs font-bold text-gray-900">Thủ Công 100%</h4>
+            <p className="text-[11px] text-gray-500">Chế tác thủ công tỉ mỉ</p>
           </div>
         </div>
 
@@ -120,7 +120,7 @@ export default function BannerSlider({ banners = [], onBannerClick }) {
           </div>
           <div>
             <h4 className="text-xs font-bold text-gray-900">Đổi Trả 7 Ngày</h4>
-            <p className="text-[11px] text-gray-500">Thủ tục nhanh chóng</p>
+            <p className="text-[11px] text-gray-500">Nếu lỗi từ nhà sản xuất</p>
           </div>
         </div>
 
@@ -129,8 +129,8 @@ export default function BannerSlider({ banners = [], onBannerClick }) {
             <Zap className="w-5 h-5" />
           </div>
           <div>
-            <h4 className="text-xs font-bold text-gray-900">Giao Siêu Tốc 2H</h4>
-            <p className="text-[11px] text-gray-500">Nội thành Hà Nội & HCM</p>
+            <h4 className="text-xs font-bold text-gray-900">Đóng Gói Chống Sốc</h4>
+            <p className="text-[11px] text-gray-500">Bảo vệ hàng gốm sứ & mây</p>
           </div>
         </div>
       </div>

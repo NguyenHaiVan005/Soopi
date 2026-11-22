@@ -19,6 +19,12 @@ export default function ProfileModal({ onClose, onTrackOrder }) {
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
+  // Cancel order state
+  const [orderToCancel, setOrderToCancel] = useState(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancellingOrder, setCancellingOrder] = useState(false);
+  const [cancelError, setCancelError] = useState('');
+
   useEffect(() => {
     fetchOrders();
   }, []);
@@ -54,8 +60,32 @@ export default function ProfileModal({ onClose, onTrackOrder }) {
     }
   };
 
+  const handleCancelOrder = async () => {
+    if (!cancelReason.trim()) {
+      setCancelError('Vui lòng nhập lý do hủy đơn hàng.');
+      return;
+    }
+    setCancellingOrder(true);
+    setCancelError('');
+    try {
+      const res = await api.cancelMyOrder(orderToCancel.id, cancelReason.trim());
+      if (res.success) {
+        setOrderToCancel(null);
+        setCancelReason('');
+        await fetchOrders();
+      } else {
+        setCancelError(res.message || 'Không thể hủy đơn hàng.');
+      }
+    } catch (err) {
+      setCancelError(err.message || 'Có lỗi xảy ra khi hủy đơn hàng.');
+    } finally {
+      setCancellingOrder(false);
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-gray-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <>
+      <div className="fixed inset-0 z-50 overflow-y-auto bg-gray-900/60 backdrop-blur-xs flex items-center justify-center p-4">
       <div className="relative bg-white rounded-3xl max-w-3xl w-full shadow-2xl overflow-hidden my-6 flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-orange-50/40 to-white">
@@ -166,6 +196,16 @@ export default function ProfileModal({ onClose, onTrackOrder }) {
                           ))}
                         </div>
 
+                        {/* Cancel Reason display */}
+                        {o.shipping_status === 'cancelled' && o.cancel_reason && (
+                          <div className="mt-2 p-2.5 bg-red-50 border border-red-100 rounded-xl text-xs">
+                            <span className="font-semibold text-red-700">
+                              Lý do hủy {o.cancelled_by === 'admin' ? '(Người bán)' : '(Bạn)'}:
+                            </span>
+                            <span className="text-red-600 ml-1">{o.cancel_reason}</span>
+                          </div>
+                        )}
+
                         {/* Order Footer */}
                         <div className="pt-3 border-t border-gray-100 flex items-center justify-between text-xs">
                           <span className="text-gray-500">
@@ -176,6 +216,18 @@ export default function ProfileModal({ onClose, onTrackOrder }) {
                             <span className="text-sm font-black text-soopi-600">{formatVND(o.total_amount)}</span>
                           </div>
                         </div>
+
+                        {/* Cancel button for pending orders */}
+                        {o.shipping_status === 'pending' && (
+                          <div className="pt-2 mt-1">
+                            <button
+                              onClick={() => { setOrderToCancel(o); setCancelReason(''); setCancelError(''); }}
+                              className="w-full py-2 px-3 bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs rounded-xl border border-red-200 transition-colors cursor-pointer"
+                            >
+                              Hủy đơn hàng này
+                            </button>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -275,6 +327,65 @@ export default function ProfileModal({ onClose, onTrackOrder }) {
         </div>
       </div>
     </div>
+
+    {/* Cancel Order Modal */}
+    {orderToCancel && (
+      <div className="fixed inset-0 z-[60] bg-gray-900/70 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl p-6 animate-in fade-in zoom-in-95 duration-200">
+          <h3 className="text-base font-bold text-gray-900 mb-1">Hủy đơn hàng</h3>
+          <p className="text-xs text-gray-500 mb-4">
+            Mã đơn: <span className="font-mono font-bold text-gray-800">{orderToCancel.order_code}</span>
+          </p>
+
+          <div className="space-y-2 mb-4">
+            <p className="text-xs font-semibold text-gray-700">Lý do hủy nhanh:</p>
+            {['Tôi đặt nhầm sản phẩm', 'Tôi muốn thay đổi địa chỉ giao hàng', 'Tôi muốn đặt lại với số lượng khác', 'Tìm được nơi mua tốt hơn'].map((r) => (
+              <button
+                key={r}
+                onClick={() => setCancelReason(r)}
+                className={`w-full text-left px-3 py-2 text-xs rounded-xl border transition-colors cursor-pointer ${
+                  cancelReason === r ? 'border-soopi-500 bg-orange-50 text-soopi-700 font-semibold' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                }`}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+
+          <textarea
+            value={cancelReason}
+            onChange={(e) => setCancelReason(e.target.value)}
+            placeholder="Hoặc nhập lý do của bạn..."
+            rows={3}
+            className="w-full px-3 py-2 rounded-xl border border-gray-200 focus:border-soopi-500 focus:ring-2 focus:ring-soopi-500/20 text-xs text-gray-900 outline-none resize-none"
+          />
+
+          {cancelError && (
+            <p className="text-xs text-red-600 mt-2 flex items-center gap-1">
+              <AlertCircle className="w-3 h-3" />
+              {cancelError}
+            </p>
+          )}
+
+          <div className="flex gap-2 mt-4">
+            <button
+              onClick={() => { setOrderToCancel(null); setCancelReason(''); setCancelError(''); }}
+              className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-bold text-xs hover:bg-gray-50 transition-colors cursor-pointer"
+            >
+              Quay lại
+            </button>
+            <button
+              onClick={handleCancelOrder}
+              disabled={cancellingOrder}
+              className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-xs transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {cancellingOrder ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : 'Xác nhận hủy đơn'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 

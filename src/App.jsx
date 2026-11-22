@@ -223,7 +223,7 @@ export default function App() {
                     <Sparkles className="w-5 h-5 text-emerald-500" />
                     Hàng Mới Về Tuần Này
                   </h2>
-                  <p className="text-xs text-gray-500">Cập nhật công nghệ, thiết bị và thời trang xu hướng mới nhất</p>
+                  <p className="text-xs text-gray-500">Tuyển chọn đồ thủ công mỹ nghệ, gốm sứ và quà tặng tinh xảo mới nhất</p>
                 </div>
 
                 <button

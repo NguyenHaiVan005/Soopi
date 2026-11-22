@@ -153,3 +153,4 @@ data/
 *.db
 *.sqlite
 _worker.bundle
+.wrangler/
